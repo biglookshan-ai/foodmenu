@@ -54,7 +54,7 @@ export const getRecipes = async (): Promise<Recipe[]> => {
 };
 
 export const importRecipeFromUrl = async (url: string): Promise<Recipe> => {
-  const response = await api.post('/api/recipes/import', { url });
+  const response = await api.post('/api/recipes/import-from-url', { url });
   return response.data;
 };
 

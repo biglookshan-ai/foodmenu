@@ -113,6 +113,12 @@ async def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
     }
 
 
+@router.post("/import")
+async def import_recipe_alias(body: ImportFromUrlRequest, db: Session = Depends(get_db)):
+    """Alias for /import-from-url for backwards compatibility."""
+    return await import_recipe_from_url(body, db)
+
+
 @router.post("/import-from-url")
 async def import_recipe_from_url(body: ImportFromUrlRequest, db: Session = Depends(get_db)):
     """
