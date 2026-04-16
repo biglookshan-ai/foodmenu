@@ -87,9 +87,9 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({ recipe, isOpen, o
                       <div className="text-xs text-gray-500">脂肪</div>
                     </div>
                   )}
-                  {nutrition.carbohydrates !== undefined && (
+                  {(nutrition.carbohydrates !== undefined || nutrition.carbs !== undefined) && (
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-yellow-500">{nutrition.carbohydrates}g</div>
+                      <div className="text-2xl font-bold text-yellow-500">{nutrition.carbohydrates || nutrition.carbs}g</div>
                       <div className="text-xs text-gray-500">碳水</div>
                     </div>
                   )}
@@ -116,7 +116,7 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({ recipe, isOpen, o
                       key={index}
                       className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-full text-sm"
                     >
-                      {ingredient}
+                      {ingredient.amount} {ingredient.unit} {ingredient.name}
                     </span>
                   ))}
                 </div>
@@ -134,9 +134,9 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({ recipe, isOpen, o
                   {recipe.steps.map((step, index) => (
                     <div key={index} className="flex gap-4">
                       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm">
-                        {index + 1}
+                        {step.order || index + 1}
                       </div>
-                      <p className="text-gray-600 leading-relaxed pt-1">{step}</p>
+                      <p className="text-gray-600 leading-relaxed pt-1">{step.instruction}</p>
                     </div>
                   ))}
                 </div>

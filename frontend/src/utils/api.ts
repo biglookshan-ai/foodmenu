@@ -10,25 +10,42 @@ const api = axios.create({
 });
 
 // Types
-export interface Recipe {
-  id: number;
+export interface Ingredient {
+  id?: number;
   name: string;
-  description?: string;
-  main_image?: string;
-  ingredients?: string[];
-  steps?: string[];
-  nutrition_info?: NutritionInfo;
-  source_url?: string;
-  created_at?: string;
+  amount?: string;
+  unit?: string;
+}
+
+export interface Step {
+  id?: number;
+  order: number;
+  instruction: string;
+  duration_min?: number;
 }
 
 export interface NutritionInfo {
   calories?: number;
   protein?: number;
   fat?: number;
-  carbohydrates?: number;
+  carbs?: number;
   fiber?: number;
   sodium?: number;
+  sugar?: number;
+}
+
+export interface Recipe {
+  id: number;
+  name: string;
+  description?: string;
+  main_image?: string;
+  ingredients?: Ingredient[];
+  steps?: Step[];
+  nutrition_info?: NutritionInfo;
+  nutrition?: NutritionInfo;
+  source_url?: string;
+  source_type?: string;
+  created_at?: string;
 }
 
 export interface MealPlan {

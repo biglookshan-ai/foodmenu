@@ -161,9 +161,9 @@ const RecipeLibrary = () => {
                       {recipe.description}
                     </p>
                   )}
-                  {recipe.nutrition_info?.calories && (
+                  {(recipe.nutrition_info?.calories || recipe.nutrition?.calories) && (
                     <div className="text-xs text-primary mb-3">
-                      {recipe.nutrition_info.calories} 千卡
+                      {recipe.nutrition_info?.calories || recipe.nutrition?.calories} 千卡
                     </div>
                   )}
                   <button

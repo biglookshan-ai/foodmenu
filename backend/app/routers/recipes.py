@@ -82,6 +82,15 @@ async def list_recipes(skip: int = 0, limit: int = 20, db: Session = Depends(get
             "description": r.description,
             "source_type": r.source_type,
             "source_url": r.source_url,
+            "nutrition": json.loads(r.nutrition_json) if r.nutrition_json else None,
+            "ingredients": [
+                {"id": i.id, "name": i.name, "amount": i.amount, "unit": i.unit}
+                for i in r.ingredients
+            ],
+            "steps": [
+                {"id": s.id, "order": s.order, "instruction": s.instruction, "duration_min": s.duration_min}
+                for s in sorted(r.steps, key=lambda s: s.order)
+            ],
         }
         for r in recipes
     ]
@@ -147,15 +156,26 @@ async def import_recipe_from_url(body: ImportFromUrlRequest, db: Session = Depen
     recipe_id = _create_recipe_in_db(recipe_data, db)
     logger.info("[recipes] Recipe imported: id=%d name=%s", recipe_id, recipe_data.name)
 
+    # Fetch the full recipe to return
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
     return JSONResponse(
         status_code=201,
         content={
-            "id": recipe_id,
-            "message": "Recipe imported successfully",
-            "name": recipe_data.name,
-            "scraped_ingredients": len(recipe_data.ingredients),
-            "scraped_steps": len(recipe_data.steps),
-            "nutrition": recipe_data.nutrition.model_dump() if recipe_data.nutrition else None,
+            "id": recipe.id,
+            "name": recipe.name,
+            "main_image": recipe.main_image,
+            "description": recipe.description,
+            "source_type": recipe.source_type,
+            "source_url": recipe.source_url,
+            "nutrition": json.loads(recipe.nutrition_json) if recipe.nutrition_json else None,
+            "ingredients": [
+                {"id": i.id, "name": i.name, "amount": i.amount, "unit": i.unit}
+                for i in recipe.ingredients
+            ],
+            "steps": [
+                {"id": s.id, "order": s.order, "instruction": s.instruction, "duration_min": s.duration_min}
+                for s in sorted(recipe.steps, key=lambda s: s.order)
+            ],
         },
     )
 
