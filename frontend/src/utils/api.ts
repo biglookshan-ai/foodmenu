@@ -104,4 +104,18 @@ export const getRecipeById = async (id: number): Promise<Recipe> => {
   return response.data;
 };
 
+export const deleteRecipe = async (id: number): Promise<void> => {
+  await api.delete(`/api/recipes/${id}`);
+};
+
+export const updateRecipe = async (id: number, data: Partial<Recipe>): Promise<Recipe> => {
+  const response = await api.patch(`/api/recipes/${id}`, data);
+  return response.data;
+};
+
+export const createMealPlan = async (data: { date: string; meal_type: string; recipe_id: number }): Promise<MealPlan> => {
+  const response = await api.post('/api/mealplans/', data);
+  return response.data;
+};
+
 export default api;

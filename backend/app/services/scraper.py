@@ -149,7 +149,7 @@ async def _scrape_xiachufang(url: str) -> Optional[RecipeCreate]:
     name = name_tag.get_text(strip=True) if name_tag else ""
 
     img_tag = soup.select_one(".recipe-cover img, .cover-img img, img.recipe-cover")
-    main_image = img_tag.get("src") or img_tag.get("data-src") if img_tag else None
+    main_image = img_tag.get("data-src") or img_tag.get("src") if img_tag else None
 
     ingredients: list[IngredientCreate] = []
     ing_rows = soup.select(".ingredient-item, .ingredient-row, .ing-row, tr.ingredient-item")
@@ -259,33 +259,48 @@ async def _scrape_meishichina(url: str) -> Optional[RecipeCreate]:
         except Exception as exc:
             logger.warning("[scraper] meishichina JSON-LD parse failed: %s", exc)
 
-    # Fallback HTML parsing
-    name_tag = soup.select_one(".recipe-title, .recipe-name, .recipe-header h1, h1")
+    # Fallback HTML parsing using meishichina-specific selectors
+    # Title
+    name_tag = soup.select_one("#recipe_title")
     name = name_tag.get_text(strip=True) if name_tag else ""
 
-    img_tag = soup.select_one(".recipe-cover img, .recipe-img img, .cover-img img")
-    main_image = img_tag.get("src") or img_tag.get("data-src") if img_tag else None
+    # Main image (lazy-loaded with data-src)
+    img_tag = soup.select_one("#recipe_De_imgBox img")
+    main_image = img_tag.get("data-src") or img_tag.get("src") if img_tag else None
 
+    # Ingredients - in fieldset.particulars elements
+    # Each has .category_s2 (amount) then .category_s1 (name) pairs
     ingredients: list[IngredientCreate] = []
-    ing_rows = soup.select(".ingredient-item, .ing-row, .ingredient-row, ul.ingredient-list li")
-    for row in ing_rows:
-        amount_el = row.select_one(".amount, .ing-amount, .num")
-        name_el = row.select_one(".name, .ing-name")
-        amount = amount_el.get_text(strip=True) if amount_el else None
-        ing_name = name_el.get_text(strip=True) if name_el else row.get_text(strip=True)
-        if ing_name:
-            num_amt, unit = _extract_number_amount(amount or "")
-            ingredients.append(IngredientCreate(name=ing_name, amount=num_amt or amount, unit=unit))
+    for fieldset in soup.select("fieldset.particulars"):
+        s1_elements = fieldset.select(".category_s1")  # names
+        s2_elements = fieldset.select(".category_s2")  # amounts
+        # s2 (amount) comes before s1 (name) in DOM order
+        for s2_el, s1_el in zip(s2_elements, s1_elements):
+            amount = s2_el.get_text(strip=True)
+            ing_name = s1_el.get_text(strip=True)
+            if ing_name:
+                num_amt, unit = _extract_number_amount(amount)
+                ingredients.append(IngredientCreate(
+                    name=ing_name,
+                    amount=num_amt or amount,
+                    unit=unit
+                ))
 
+    # Steps - inside one .recipeStep container
+    # Text in .recipeStep_word, images lazy-loaded with data-src
     steps: list[StepCreate] = []
-    step_els = soup.select(".step-item, .step-row, .recipe-step, .step-con")
-    for i, el in enumerate(step_els, start=1):
-        text = el.get_text(strip=True)
-        text = re.sub(r"^\d+[.、)\s]*", "", text)
-        if text:
-            steps.append(StepCreate(order=i, instruction=text))
+    recipe_step = soup.select_one(".recipeStep")
+    if recipe_step:
+        word_els = recipe_step.select(".recipeStep_word")
+        for i, word_el in enumerate(word_els, start=1):
+            text = word_el.get_text(strip=True)
+            # Remove leading step numbers like "1", "2" etc.
+            text = re.sub(r"^\d+", "", text).strip()
+            if text:
+                steps.append(StepCreate(order=i, instruction=text))
 
-    tips_tag = soup.select_one(".tips, .recipe-tip, .cooking-tip")
+    # Tips/description
+    tips_tag = soup.select_one(".recipe_tips, .tips, .recipe-tip, .cooking-tip")
     tips = tips_tag.get_text(strip=True) if tips_tag else None
 
     if not name:
