@@ -1,12 +1,9 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChefHat, Plus, Calendar, TrendingUp, ArrowRight, Sparkles } from 'lucide-react'
 import Button from '../components/Button'
 
 const Home = () => {
   const navigate = useNavigate()
-  const [loading] = useState(false)
-
   // Mock data - in real app would come from store/API
   const stats = {
     totalRecipes: 24,

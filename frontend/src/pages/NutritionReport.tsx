@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell
 } from 'recharts'
-import { Flame, Zap, Droplets, Wheat, TrendingUp, TrendingDown, Minus } from 'lucide-react'
-
-const COLORS = ['#4CAF50', '#FF9800', '#2196F3', '#9C27B0']
+import { Flame, Zap, Droplets, Wheat, TrendingUp, TrendingDown } from 'lucide-react'
 
 const NutritionReport = () => {
   const [weeklyData] = useState([
@@ -169,8 +167,7 @@ const NutritionReport = () => {
               <div className="flex items-center justify-center gap-1">
                 {trend.direction === 'up' && <TrendingUp className="w-4 h-4 text-green-500" />}
                 {trend.direction === 'down' && <TrendingDown className="w-4 h-4 text-red-500" />}
-                {trend.direction === 'same' && <Minus className="w-4 h-4 text-gray-400" />}
-                <span className={`font-bold text-lg ${trend.direction === 'up' ? 'text-green-500' : trend.direction === 'down' ? 'text-red-500' : 'text-gray-400'}`}>
+                <span className={`font-bold text-lg ${trend.direction === 'up' ? 'text-green-500' : 'text-red-500'}`}>
                   {trend.value}
                 </span>
               </div>
@@ -237,13 +234,12 @@ function NutritionCard({
   )
 }
 
-function TrendBadge({ value, direction }: { value: string; direction: 'up' | 'down' | 'same' }) {
-  const colorClass = direction === 'up' ? 'bg-green-100 text-green-600' : direction === 'down' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'
+function TrendBadge({ value, direction }: { value: string; direction: 'up' | 'down' }) {
+  const colorClass = direction === 'up' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
   return (
     <span className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${colorClass}`}>
       {direction === 'up' && <TrendingUp className="w-3 h-3" />}
       {direction === 'down' && <TrendingDown className="w-3 h-3" />}
-      {direction === 'same' && <Minus className="w-3 h-3" />}
       {value}
     </span>
   )

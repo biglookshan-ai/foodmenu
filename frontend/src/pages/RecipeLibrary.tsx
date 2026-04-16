@@ -6,11 +6,10 @@ import { Recipe } from '../utils/api';
 
 const RecipeLibrary = () => {
   const [searchUrl, setSearchUrl] = useState('');
-  const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { recipes, fetchRecipes, importRecipe, error } = useAppContext();
+  const { recipes, fetchRecipes, importRecipe, isLoading, error } = useAppContext();
 
   useEffect(() => {
     fetchRecipes();
@@ -125,7 +124,7 @@ const RecipeLibrary = () => {
           </span>
         </div>
 
-        {loading && recipes.length === 0 ? (
+        {isLoading && recipes.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 text-primary animate-spin" />
             <span className="ml-3 text-gray-500">加载中...</span>

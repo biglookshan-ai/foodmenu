@@ -1,4 +1,4 @@
-import { ChefHat, BookOpen, Calendar, BarChart3, Plus, Search, Image, Video } from 'lucide-react'
+import { ChefHat, BookOpen, Calendar, BarChart3, Plus, Search } from 'lucide-react'
 import Button from './Button'
 
 type EmptyStateVariant = 'recipes' | 'planner' | 'nutrition' | 'search' | 'custom'

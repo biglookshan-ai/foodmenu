@@ -80,7 +80,7 @@ const MealPlanner = () => {
     const existingPlan = getMealPlan(selectedSlot.day, selectedSlot.meal);
     if (existingPlan) {
       try {
-        const updated = await assignRecipeToMealPlan(existingPlan.id, recipe.id);
+        await assignRecipeToMealPlan(existingPlan.id, recipe.id);
         updateMealPlanInState(existingPlan.id, { recipe_id: recipe.id, recipe });
       } catch (err) {
         console.error('Failed to assign recipe:', err);
@@ -92,8 +92,8 @@ const MealPlanner = () => {
 
   const handleRemoveRecipe = async (mealPlan: MealPlan) => {
     try {
-      const updated = await updateMealPlan(mealPlan.id, { recipe_id: null });
-      updateMealPlanInState(mealPlan.id, { recipe_id: null, recipe: undefined });
+      await updateMealPlan(mealPlan.id, { recipe_id: undefined });
+      updateMealPlanInState(mealPlan.id, { recipe_id: undefined, recipe: undefined });
     } catch (err) {
       console.error('Failed to remove recipe:', err);
       setError('移除菜谱失败');
