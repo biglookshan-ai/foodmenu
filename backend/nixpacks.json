@@ -1,0 +1,12 @@
+{
+  "builders": {
+    "name": "python",
+    "version": "3.11"
+  },
+  "requires": [],
+  "python": {
+    "version": "3.11",
+    "installTool": "pip",
+    "requirementsFile": "requirements.txt"
+  }
+}
