@@ -87,9 +87,9 @@ const RecipeDetailModal: React.FC<RecipeDetailModalProps> = ({ recipe, isOpen, o
                       <div className="text-xs text-gray-500">脂肪</div>
                     </div>
                   )}
-                  {(nutrition.carbohydrates !== undefined || nutrition.carbs !== undefined) && (
+                  {nutrition.carbs !== undefined && (
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-yellow-500">{nutrition.carbohydrates || nutrition.carbs}g</div>
+                      <div className="text-2xl font-bold text-yellow-500">{nutrition.carbs}g</div>
                       <div className="text-xs text-gray-500">碳水</div>
                     </div>
                   )}
