@@ -85,9 +85,68 @@ export const getRecipes = async (): Promise<Recipe[]> => {
   return recipes;
 };
 
-export const importRecipeFromUrl = async (_url: string): Promise<Recipe> => {
-  // TODO: Implement with scraping service or Supabase Edge Function
-  throw new Error('Import from URL not yet implemented. Please add recipes manually.');
+const SCRAPE_API_URL = ''; // Empty means same origin (Vercel)
+
+interface ScrapeResult {
+  name: string;
+  description?: string;
+  main_image?: string;
+  source_type: string;
+  source_url: string;
+  ingredients: { name: string; amount?: string }[];
+  steps: { order: number; instruction: string; image?: string }[];
+}
+
+export const importRecipeFromUrl = async (url: string): Promise<Recipe> => {
+  // Step 1: Call scraper API
+  const scrapeResp = await fetch(`${SCRAPE_API_URL}/api/scrape`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+  
+  if (!scrapeResp.ok) {
+    const err = await scrapeResp.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error || 'Scraping failed');
+  }
+  
+  const scraped: ScrapeResult = await scrapeResp.json();
+  
+  // Step 2: Create recipe in Supabase
+  const recipeData = {
+    name: scraped.name,
+    description: scraped.description || '',
+    main_image: scraped.main_image || '',
+    source_type: scraped.source_type,
+    source_url: scraped.source_url,
+    nutrition: null
+  };
+  
+  // Insert recipe
+  const insertResp = await supabaseClient.post('/recipes', recipeData);
+  const newRecipe = insertResp.data?.[0] || insertResp.data;
+  const newId = newRecipe.id;
+  
+  // Insert ingredients
+  for (const ing of scraped.ingredients || []) {
+    await supabaseClient.post('/ingredients', {
+      recipe_id: newId,
+      name: ing.name,
+      amount: ing.amount || ''
+    });
+  }
+  
+  // Insert steps
+  for (const step of scraped.steps || []) {
+    await supabaseClient.post('/steps', {
+      recipe_id: newId,
+      step_order: step.order,
+      instruction: step.instruction
+    });
+  }
+  
+  // Return the created recipe
+  return getRecipeById(newId);
 };
 
 export const getMealPlans = async (startDate?: string, endDate?: string): Promise<MealPlan[]> => {

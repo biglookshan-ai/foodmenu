@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "functions": {
+    "api/scraper.py": {
+      "runtime": "python3.9"
+    },
+    "api/index.py": {
+      "runtime": "python3.9"
+    }
+  },
+  "builds": [
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/node-build",
+      "config": { "distDir": "dist" }
+    }
+  ],
+  "routes": [
+    { "src": "/api/scrape", "dest": "/api/scraper.py" },
+    { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "src": "/(.*)", "dest": "/frontend/$1" }
+  ]
+}
