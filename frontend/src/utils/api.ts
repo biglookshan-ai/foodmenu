@@ -63,6 +63,12 @@ export interface MealPlan {
   user_id?: number;
 }
 
+export interface User {
+  id: number;
+  name: string;
+  email?: string;
+}
+
 // API Functions - direct Supabase REST API calls
 export const getRecipes = async (): Promise<Recipe[]> => {
   const response = await supabaseClient.get('/recipes?select=*');
@@ -79,7 +85,7 @@ export const getRecipes = async (): Promise<Recipe[]> => {
   return recipes;
 };
 
-export const importRecipeFromUrl = async (url: string): Promise<Recipe> => {
+export const importRecipeFromUrl = async (_url: string): Promise<Recipe> => {
   // TODO: Implement with scraping service or Supabase Edge Function
   throw new Error('Import from URL not yet implemented. Please add recipes manually.');
 };
@@ -105,7 +111,7 @@ export const assignRecipeToMealPlan = async (mealPlanId: number, recipeId: numbe
   return response.data;
 };
 
-export const getNutrition = async (recipeId?: number): Promise<NutritionInfo> => {
+export const getNutrition = async (_recipeId?: number): Promise<NutritionInfo> => {
   // Placeholder - would need backend for real nutrition calculation
   return { calories: 0, protein: 0, fat: 0, carbs: 0 };
 };
