@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = ((import.meta as any).env?.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -64,14 +64,14 @@ export interface User {
   email?: string;
 }
 
-// API Functions
+// API Functions - all endpoints have trailing slash to avoid Railway 307 redirect
 export const getRecipes = async (): Promise<Recipe[]> => {
-  const response = await api.get('/api/recipes');
+  const response = await api.get('/api/recipes/');
   return response.data;
 };
 
 export const importRecipeFromUrl = async (url: string): Promise<Recipe> => {
-  const response = await api.post('/api/recipes/import-from-url', { url });
+  const response = await api.post('/api/recipes/import-from-url/', { url });
   return response.data;
 };
 
@@ -79,37 +79,37 @@ export const getMealPlans = async (startDate?: string, endDate?: string): Promis
   const params: Record<string, string> = {};
   if (startDate) params.start_date = startDate;
   if (endDate) params.end_date = endDate;
-  const response = await api.get('/api/mealplans', { params });
+  const response = await api.get('/api/mealplans/', { params });
   return response.data;
 };
 
 export const updateMealPlan = async (id: number, data: Partial<MealPlan>): Promise<MealPlan> => {
-  const response = await api.patch(`/api/mealplans/${id}`, data);
+  const response = await api.patch(`/api/mealplans/${id}/`, data);
   return response.data;
 };
 
 export const assignRecipeToMealPlan = async (mealPlanId: number, recipeId: number): Promise<MealPlan> => {
-  const response = await api.patch(`/api/mealplans/${mealPlanId}`, { recipe_id: recipeId });
+  const response = await api.patch(`/api/mealplans/${mealPlanId}/`, { recipe_id: recipeId });
   return response.data;
 };
 
 export const getNutrition = async (recipeId?: number): Promise<NutritionInfo> => {
-  const endpoint = recipeId ? `/api/nutrition/${recipeId}` : '/api/nutrition';
+  const endpoint = recipeId ? `/api/nutrition/${recipeId}/` : '/api/nutrition/';
   const response = await api.get(endpoint);
   return response.data;
 };
 
 export const getRecipeById = async (id: number): Promise<Recipe> => {
-  const response = await api.get(`/api/recipes/${id}`);
+  const response = await api.get(`/api/recipes/${id}/`);
   return response.data;
 };
 
 export const deleteRecipe = async (id: number): Promise<void> => {
-  await api.delete(`/api/recipes/${id}`);
+  await api.delete(`/api/recipes/${id}/`);
 };
 
 export const updateRecipe = async (id: number, data: Partial<Recipe>): Promise<Recipe> => {
-  const response = await api.patch(`/api/recipes/${id}`, data);
+  const response = await api.patch(`/api/recipes/${id}/`, data);
   return response.data;
 };
 
@@ -119,4 +119,4 @@ export const createMealPlan = async (data: { date: string; meal_type: string; re
 };
 
 export default api;
-// Rebuild trigger: Fri Apr 17 08:36:27 AM CST 2026
+// Rebuild trigger: Fri Apr 17 09:03 AM CST 2026 - fix Railway 307 redirect issue
