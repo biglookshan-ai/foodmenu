@@ -1,11 +1,16 @@
 import axios from 'axios';
 
-const API_BASE_URL = ((import.meta as any).env?.VITE_API_URL || '').replace(/\/$/, '');
+// Supabase configuration - direct API calls
+const SUPABASE_URL = 'https://uvfdmdhepemhospjvrsy.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV2ZmRtZGhlcGVtaG9zcGp2cnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNjA0MTMsImV4cCI6MjA5MTkzNjQxM30.0X_9cvSXZGoAn3XVvQZz1cbee7o9f952x20Dkp_e_Uc';
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
+const supabaseClient = axios.create({
+  baseURL: `${SUPABASE_URL}/rest/v1`,
   headers: {
     'Content-Type': 'application/json',
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    'Prefer': 'return=representation'
   },
 });
 
@@ -58,65 +63,103 @@ export interface MealPlan {
   user_id?: number;
 }
 
-export interface User {
-  id: number;
-  name: string;
-  email?: string;
-}
-
-// API Functions - all endpoints have trailing slash to avoid Railway 307 redirect
+// API Functions - direct Supabase REST API calls
 export const getRecipes = async (): Promise<Recipe[]> => {
-  const response = await api.get('/api/recipes/');
-  return response.data;
+  const response = await supabaseClient.get('/recipes?select=*');
+  // Fetch ingredients and steps for each recipe
+  const recipes = response.data;
+  for (const recipe of recipes) {
+    const [ingResp, stepResp] = await Promise.all([
+      supabaseClient.get(`/ingredients?recipe_id=eq.${recipe.id}&select=*`),
+      supabaseClient.get(`/steps?recipe_id=eq.${recipe.id}&select=*&order=step_order`)
+    ]);
+    recipe.ingredients = ingResp.data;
+    recipe.steps = stepResp.data;
+  }
+  return recipes;
 };
 
 export const importRecipeFromUrl = async (url: string): Promise<Recipe> => {
-  const response = await api.post('/api/recipes/import-from-url/', { url });
-  return response.data;
+  // TODO: Implement with scraping service or Supabase Edge Function
+  throw new Error('Import from URL not yet implemented. Please add recipes manually.');
 };
 
 export const getMealPlans = async (startDate?: string, endDate?: string): Promise<MealPlan[]> => {
   const params: Record<string, string> = {};
-  if (startDate) params.start_date = startDate;
-  if (endDate) params.end_date = endDate;
-  const response = await api.get('/api/mealplans/', { params });
+  if (startDate) params['date'] = `gte.${startDate}`;
+  if (endDate) params['date'] = `lte.${endDate}`;
+  params['select'] = '*';
+  params['order'] = 'date';
+  
+  const response = await supabaseClient.get('/mealplans', { params });
   return response.data;
 };
 
 export const updateMealPlan = async (id: number, data: Partial<MealPlan>): Promise<MealPlan> => {
-  const response = await api.patch(`/api/mealplans/${id}/`, data);
+  const response = await supabaseClient.patch(`/mealplans?id=eq.${id}`, data);
   return response.data;
 };
 
 export const assignRecipeToMealPlan = async (mealPlanId: number, recipeId: number): Promise<MealPlan> => {
-  const response = await api.patch(`/api/mealplans/${mealPlanId}/`, { recipe_id: recipeId });
+  const response = await supabaseClient.patch(`/mealplans?id=eq.${mealPlanId}`, { recipe_id: recipeId });
   return response.data;
 };
 
 export const getNutrition = async (recipeId?: number): Promise<NutritionInfo> => {
-  const endpoint = recipeId ? `/api/nutrition/${recipeId}/` : '/api/nutrition/';
-  const response = await api.get(endpoint);
-  return response.data;
+  // Placeholder - would need backend for real nutrition calculation
+  return { calories: 0, protein: 0, fat: 0, carbs: 0 };
 };
 
 export const getRecipeById = async (id: number): Promise<Recipe> => {
-  const response = await api.get(`/api/recipes/${id}/`);
-  return response.data;
+  const response = await supabaseClient.get(`/recipes?id=eq.${id}&select=*`);
+  const recipe = response.data[0];
+  if (recipe) {
+    const [ingResp, stepResp] = await Promise.all([
+      supabaseClient.get(`/ingredients?recipe_id=eq.${recipe.id}&select=*`),
+      supabaseClient.get(`/steps?recipe_id=eq.${recipe.id}&select=*&order=step_order`)
+    ]);
+    recipe.ingredients = ingResp.data;
+    recipe.steps = stepResp.data;
+  }
+  return recipe;
 };
 
 export const deleteRecipe = async (id: number): Promise<void> => {
-  await api.delete(`/api/recipes/${id}/`);
+  await supabaseClient.delete(`/recipes?id=eq.${id}`);
 };
 
 export const updateRecipe = async (id: number, data: Partial<Recipe>): Promise<Recipe> => {
-  const response = await api.patch(`/api/recipes/${id}/`, data);
-  return response.data;
+  // Extract nested data
+  const { ingredients, steps, ...recipeData } = data;
+  
+  // Update recipe
+  if (Object.keys(recipeData).length > 0) {
+    await supabaseClient.patch(`/recipes?id=eq.${id}`, recipeData);
+  }
+  
+  // Update ingredients if provided
+  if (ingredients !== undefined) {
+    await supabaseClient.delete(`/ingredients?recipe_id=eq.${id}`);
+    for (const ing of ingredients) {
+      await supabaseClient.post('/ingredients', { recipe_id: id, name: ing.name, amount: ing.amount, unit: ing.unit });
+    }
+  }
+  
+  // Update steps if provided
+  if (steps !== undefined) {
+    await supabaseClient.delete(`/steps?recipe_id=eq.${id}`);
+    for (const step of steps) {
+      await supabaseClient.post('/steps', { recipe_id: id, step_order: step.order, instruction: step.instruction, duration_min: step.duration_min });
+    }
+  }
+  
+  return getRecipeById(id);
 };
 
 export const createMealPlan = async (data: { date: string; meal_type: string; recipe_id: number }): Promise<MealPlan> => {
-  const response = await api.post('/api/mealplans/', data);
+  const response = await supabaseClient.post('/mealplans', { ...data, completed: false });
   return response.data;
 };
 
-export default api;
-// Rebuild trigger: Fri Apr 17 09:03 AM CST 2026 - fix Railway 307 redirect issue
+export default supabaseClient;
+// Updated: direct Supabase REST API (no backend server needed)
