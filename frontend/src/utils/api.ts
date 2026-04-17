@@ -85,7 +85,8 @@ export const getRecipes = async (): Promise<Recipe[]> => {
   return recipes;
 };
 
-const SCRAPE_API_URL = ''; // Empty means same origin (Vercel)
+// Use CORS proxy for scraping (since Vercel Python functions aren't working)
+const CORS_PROXY = 'https://api.codetabs.com/v1/proxy?quest=';
 
 interface ScrapeResult {
   name: string;
@@ -97,20 +98,130 @@ interface ScrapeResult {
   steps: { order: number; instruction: string; image?: string }[];
 }
 
-export const importRecipeFromUrl = async (url: string): Promise<Recipe> => {
-  // Step 1: Call scraper API
-  const scrapeResp = await fetch(`${SCRAPE_API_URL}/api/scrape`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url })
-  });
+// Helper to extract text from HTML tags
+function extractText(html: string, regex: RegExp, groupIndex: number = 1): string {
+  const match = html.match(regex);
+  return match ? match[groupIndex].trim() : '';
+}
+
+// Helper to extract all matches
+function extractAll(html: string, regex: RegExp, groupIndex: number = 1): string[] {
+  const matches = html.match(new RegExp(regex, 'g'));
+  return matches ? matches.map(m => {
+    const match = m.match(regex);
+    return match ? match[groupIndex].trim() : '';
+  }) : [];
+}
+
+function parseXiachufang(html: string, url: string): ScrapeResult {
+  // Extract name
+  let name = extractText(html, /<h1[^>]*class="recipe-detail[^"]*"[^>]*>([^<]+)<\/h1>/i) ||
+             extractText(html, /<h1[^>]*>([^<]{2,50})<\/h1>/i) ||
+             extractText(html, /"name"\s*:\s*"([^"]+)"/i) ||
+             '下厨房菜谱';
+  name = name.replace(/\\"/g, '"').replace(/\\n/g, ' ').trim();
   
-  if (!scrapeResp.ok) {
-    const err = await scrapeResp.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(err.error || 'Scraping failed');
+  // Extract description
+  let description = extractText(html, /<p[^>]*class="desc[^"]*"[^>]*>([^<]+)<\/p>/i);
+  description = description.replace(/\\n/g, ' ').replace(/\s+/g, ' ').trim();
+  
+  // Extract main image
+  let mainImage = extractText(html, /"image"\s*:\s*"([^"]+)"/i) ||
+                   extractText(html, /<img[^>]*class="cover[^"]*"[^>]*src="([^"]+)"/i);
+  mainImage = mainImage.replace(/\\\//g, '/').replace(/\\/g, '');
+  if (mainImage && !mainImage.startsWith('http')) {
+    mainImage = 'https:' + mainImage;
   }
   
-  const scraped: ScrapeResult = await scrapeResp.json();
+  // Extract ingredients
+  const ingredientNames = extractAll(html, /<span[^>]*class="name[^"]*"[^>]*>([^<]+)<\/span>/gi);
+  const ingredientAmounts = extractAll(html, /<span[^>]*class="amount[^"]*"[^>]*>([^<]+)<\/span>/gi);
+  const ingredients = ingredientNames.map((name, i) => ({
+    name: name.replace(/\s+/g, ' ').trim(),
+    amount: ingredientAmounts[i] || ''
+  }));
+  
+  // Extract steps
+  const stepImages = extractAll(html, /data-src="([^"]+)"/gi).filter(src => src.includes('chuimg') || src.includes('xiachufang'));
+  const stepWords = extractAll(html, /<p[^>]*class="[^"]*step[^"]*word[^"]*"[^>]*>([^<]+)<\/p>/gi).map(s => s.replace(/<[^>]+>/g, '').trim());
+  
+  const steps = stepWords.slice(0, 10).map((instruction, i) => ({
+    order: i + 1,
+    instruction: instruction.replace(/\s+/g, ' ').trim(),
+    image: stepImages[i] ? stepImages[i].replace(/\\\//g, '/').replace(/\\/g, '') : undefined
+  }));
+  
+  return {
+    name,
+    description,
+    main_image: mainImage,
+    source_type: 'link',
+    source_url: url,
+    ingredients,
+    steps
+  };
+}
+
+function parseMeishichina(html: string, url: string): ScrapeResult {
+  // Extract name
+  const name = extractText(html, /<h1[^>]*id="recipe_title"[^>]*>([^<]+)<\/h1>/i) || '美食天下菜谱';
+  
+  // Extract main image
+  let mainImage = extractText(html, /<div[^>]*id="recipe_De_imgBox"[^>]*>\s*<img[^>]*src="([^"]+)"/i) ||
+                   extractText(html, /<img[^>]*id="recipe_De[^"]*"[^>]*src="([^"]+)"/i);
+  mainImage = mainImage.replace(/\\\//g, '/').replace(/\\/g, '');
+  if (mainImage && !mainImage.startsWith('http')) {
+    mainImage = 'https:' + mainImage;
+  }
+  
+  // Extract ingredients
+  const ingredientBlocks = html.match(/<fieldset[^>]*class="particulars"[^>]*>(.*?)<\/fieldset>/gis) || [];
+  const ingredients: { name: string; amount: string }[] = [];
+  for (const block of ingredientBlocks) {
+    const nameMatch = block.match(/<span[^>]*class="category_s1"[^>]*>([^<]+)<\/span>/i);
+    const amountMatch = block.match(/<span[^>]*class="category_s2"[^>]*>([^<]+)<\/span>/i);
+    if (nameMatch && amountMatch) {
+      ingredients.push({
+        name: nameMatch[1].trim(),
+        amount: amountMatch[1].trim()
+      });
+    }
+  }
+  
+  // Extract steps
+  const stepImages = extractAll(html, /<img[^>]*class="recipeStep_img"[^>]*data-src="([^"]+)"/gi);
+  const stepWords = extractAll(html, /<div[^>]*class="recipeStep_word"[^>]*>\s*<p[^>]*>([^<]+)<\/p>/gi).map(s => s.replace(/<[^>]+>/g, '').trim());
+  
+  const steps = stepWords.slice(0, 10).map((instruction, i) => ({
+    order: i + 1,
+    instruction: instruction.replace(/\s+/g, ' ').trim(),
+    image: stepImages[i] ? stepImages[i].replace(/\\\//g, '/').replace(/\\/g, '') : undefined
+  }));
+  
+  return {
+    name: name.trim(),
+    description: '',
+    main_image: mainImage,
+    source_type: 'link',
+    source_url: url,
+    ingredients,
+    steps
+  };
+}
+
+export const importRecipeFromUrl = async (url: string): Promise<Recipe> => {
+  // Step 1: Scrape directly using CORS proxy
+  const response = await fetch(CORS_PROXY + encodeURIComponent(url));
+  const html = await response.text();
+  
+  let scraped: ScrapeResult;
+  if (url.includes('xiachufang')) {
+    scraped = parseXiachufang(html, url);
+  } else if (url.includes('meishichina')) {
+    scraped = parseMeishichina(html, url);
+  } else {
+    throw new Error('Unsupported website. Please use xiachufang.com or meishichina.com');
+  }
   
   // Step 2: Create recipe in Supabase
   const recipeData = {
