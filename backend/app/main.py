@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import recipes, mealplans, nutrition
-from app.database import init_db
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -23,9 +22,7 @@ app.include_router(nutrition.router, prefix="/api/nutrition", tags=["Nutrition"]
 
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Initializing database tables...")
-    init_db()
-    logger.info("Database initialized successfully.")
+    logger.info("FoodMenu API started (using Supabase)")
 
 @app.get("/")
 async def root():

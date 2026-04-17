@@ -1,14 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Optional
 import logging
-import json
 import os
 
-from app.models import Recipe, Ingredient, Step
-from app.database import get_db
+from app.database import (
+    list_recipes, get_recipe, create_recipe, 
+    update_recipe, delete_recipe, get_mealplans,
+    create_mealplan, update_mealplan, delete_mealplan
+)
 from app.schemas import RecipeCreate, IngredientCreate, StepCreate, NutritionInfo
 from app.services.scraper import scrape_recipe
 from app.services.vision import extract_nutrition_from_url, extract_nutrition_from_file
@@ -35,101 +36,60 @@ class NutritionResponse(BaseModel):
     nutrition: NutritionInfo
 
 
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def _create_recipe_in_db(recipe_data: RecipeCreate, db: Session) -> int:
-    """Persist a RecipeCreate model to the database. Returns recipe ID."""
-    db_recipe = Recipe(
-        name=recipe_data.name,
-        main_image=recipe_data.main_image,
-        description=recipe_data.description,
-        source_type=recipe_data.source_type,
-        source_url=recipe_data.source_url,
-        nutrition_json=recipe_data.nutrition.model_dump_json() if recipe_data.nutrition else None,
-    )
-    db.add(db_recipe)
-    db.commit()
-    db.refresh(db_recipe)
-
-    for ing in recipe_data.ingredients:
-        db.add(Ingredient(recipe_id=db_recipe.id, **ing.model_dump()))
-    for step in recipe_data.steps:
-        db.add(Step(recipe_id=db_recipe.id, **step.model_dump()))
-
-    db.commit()
-    return db_recipe.id
-
-
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/", response_model=dict)
-async def create_recipe(recipe: RecipeCreate, db: Session = Depends(get_db)):
+async def create_recipe_endpoint(recipe: RecipeCreate):
     """Create a new recipe."""
-    recipe_id = _create_recipe_in_db(recipe, db)
+    recipe_data = recipe.model_dump()
+    recipe_id = create_recipe(recipe_data)
     logger.info("[recipes] Recipe created: id=%d name=%s", recipe_id, recipe.name)
     return {"id": recipe_id, "message": "Recipe created"}
 
 
 @router.get("/", response_model=List[dict])
-async def list_recipes(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
+async def list_recipes_endpoint(skip: int = 0, limit: int = 20):
     """List all recipes with pagination."""
-    recipes = db.query(Recipe).offset(skip).limit(limit).all()
-    return [
-        {
-            "id": r.id,
-            "name": r.name,
-            "main_image": r.main_image,
-            "description": r.description,
-            "source_type": r.source_type,
-            "source_url": r.source_url,
-            "nutrition": json.loads(r.nutrition_json) if r.nutrition_json else None,
-            "ingredients": [
-                {"id": i.id, "name": i.name, "amount": i.amount, "unit": i.unit}
-                for i in r.ingredients
-            ],
-            "steps": [
-                {"id": s.id, "order": s.order, "instruction": s.instruction, "duration_min": s.duration_min}
-                for s in sorted(r.steps, key=lambda s: s.order)
-            ],
-        }
-        for r in recipes
-    ]
+    recipes = list_recipes(skip=skip, limit=limit)
+    return recipes
 
 
 @router.get("/{recipe_id}")
-async def get_recipe(recipe_id: int, db: Session = Depends(get_db)):
+async def get_recipe_endpoint(recipe_id: int):
     """Get a single recipe with ingredients and steps."""
-    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    recipe = get_recipe(recipe_id)
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
+    return recipe
 
-    return {
-        "id": recipe.id,
-        "name": recipe.name,
-        "main_image": recipe.main_image,
-        "description": recipe.description,
-        "source_type": recipe.source_type,
-        "source_url": recipe.source_url,
-        "nutrition": json.loads(recipe.nutrition_json) if recipe.nutrition_json else None,
-        "ingredients": [
-            {"id": i.id, "name": i.name, "amount": i.amount, "unit": i.unit}
-            for i in recipe.ingredients
-        ],
-        "steps": [
-            {"id": s.id, "order": s.order, "instruction": s.instruction, "duration_min": s.duration_min}
-            for s in sorted(recipe.steps, key=lambda s: s.order)
-        ],
-    }
+
+@router.patch("/{recipe_id}")
+async def update_recipe_endpoint(recipe_id: int, recipe: RecipeCreate):
+    """Update a recipe."""
+    recipe_data = recipe.model_dump()
+    success = update_recipe(recipe_id, recipe_data)
+    if not success:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return {"id": recipe_id, "message": "Recipe updated"}
+
+
+@router.delete("/{recipe_id}")
+async def delete_recipe_endpoint(recipe_id: int):
+    """Delete a recipe."""
+    success = delete_recipe(recipe_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return {"message": "Recipe deleted"}
 
 
 @router.post("/import")
-async def import_recipe_alias(body: ImportFromUrlRequest, db: Session = Depends(get_db)):
+async def import_recipe_alias(body: ImportFromUrlRequest):
     """Alias for /import-from-url for backwards compatibility."""
-    return await import_recipe_from_url(body, db)
+    return await import_recipe_from_url(body)
 
 
 @router.post("/import-from-url")
-async def import_recipe_from_url(body: ImportFromUrlRequest, db: Session = Depends(get_db)):
+async def import_recipe_from_url(body: ImportFromUrlRequest):
     """
     Scrape a recipe from a URL (xiachufang.com or meishichina.com)
     and save it to the database.
@@ -153,30 +113,16 @@ async def import_recipe_from_url(body: ImportFromUrlRequest, db: Session = Depen
             recipe_data.nutrition = nutrition
             logger.info("[recipes] Nutrition auto-extracted for: %s", recipe_data.name)
 
-    recipe_id = _create_recipe_in_db(recipe_data, db)
+    # Convert to dict for database
+    recipe_dict = recipe_data.model_dump()
+    recipe_id = create_recipe(recipe_dict)
     logger.info("[recipes] Recipe imported: id=%d name=%s", recipe_id, recipe_data.name)
 
     # Fetch the full recipe to return
-    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    recipe = get_recipe(recipe_id)
     return JSONResponse(
         status_code=201,
-        content={
-            "id": recipe.id,
-            "name": recipe.name,
-            "main_image": recipe.main_image,
-            "description": recipe.description,
-            "source_type": recipe.source_type,
-            "source_url": recipe.source_url,
-            "nutrition": json.loads(recipe.nutrition_json) if recipe.nutrition_json else None,
-            "ingredients": [
-                {"id": i.id, "name": i.name, "amount": i.amount, "unit": i.unit}
-                for i in recipe.ingredients
-            ],
-            "steps": [
-                {"id": s.id, "order": s.order, "instruction": s.instruction, "duration_min": s.duration_min}
-                for s in sorted(recipe.steps, key=lambda s: s.order)
-            ],
-        },
+        content=recipe
     )
 
 
@@ -185,7 +131,6 @@ async def recognize_from_image(
     image_url: Optional[str] = Form(None),
     file: Optional[UploadFile] = File(None),
     auto_nutrition: bool = Form(True),
-    db: Session = Depends(get_db),
 ):
     """
     Extract nutrition information from a food image.
